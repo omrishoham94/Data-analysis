@@ -1,0 +1,419 @@
+---
+title: "Coffee Ratings"
+author: "Ido Levi & Omri Shoham"
+date: "June 2021"
+output:
+  html_document:
+   code_folding: hide
+   theme:
+      bg: "#202123"
+      fg: "#B8BCC2"
+      primary: "#EA80FC"
+      secondary: "#00DAC6"
+      base_font: 
+        google: Prompt
+      heading_font:
+        google: Proza Libre
+   toc: true
+   toc_float: true
+
+   
+  pdf_document: default
+---
+```{css, echo=FALSE}
+.background_cool_color {
+background-color: darkslategray;
+}
+```
+<img src= "https://i.ytimg.com/vi/uzMcFAs4Y_s/maxresdefault.jpg">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+```
+
+# **Background**
+
+In this markdown, we analyze [**this**](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv) data of coffee ratings.
+There is data for both Arabica and Robusta beans, across many countries and professionally rated on a 0-100 scale. All sorts of scoring for things like acidity, sweetness, fragrance, balance, etc. 
+
+# **Goals**
+Our research focuses on the quality of coffee from the farmer's point of view - intending to provid a farmer who wish to open a coffee bean farm with tools for success in growing coffee.
+
+In our research questions we focus on four main topics related to coffee quality:
+
+1. Crop height.
+2. The bean processing method.
+3. Geographical location.
+4. Factors that make up the final grade (such as aroma, flavor, aftertaste, acidity etc.).
+
+Furthermore, our research will focus on a several key questions:
+
+1. Is there a difference between the crop height and the processing methods for the overall rating?
+  
+2. Does the geographical location of the beans have an effect on the overall score? 
+  
+3. What is the most significant component that effects the coffee rating?
+
+  
+```{r libraries, message=FALSE,warning=FALSE, class.source="background_cool_color"}
+
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(countrycode)
+library(dplyr)
+library(stringr)     
+library(data.table)
+library(gridExtra) 
+library(readxl)
+library(lubridate)
+library(lessR)
+
+```
+
+# **Methods** 
+## Importing the data set
+
+The data for this project took from 'TidyTuesday' (a weekly data project in R from the R4DS online learning community), which took place in July 2020.
+The data comes from the Coffee Quality Database courtesy of Buzzfeed Data Scientist James LeDoux. The original data can be found on James' github.
+
+
+```{r Read_csv, message=FALSE,warning=FALSE, echo=FALSE}
+
+coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
+
+```
+
+#### Data dictionary
+
+
+| variable              | description                                                        | class     |
+|-----------------------|--------------------------------------------------------------------|-----------|
+| total_cup_points      | Total rating/points (0 - 100 scale)                                | double    |
+| species               | Species of coffee bean (arabica or robusta)                        | character |
+| owner                 | Owner of the farm                                                  | character |
+| country_of_origin     | Where the bean came from                                           | character |
+| farm_name             | Name of the farm                                                   | character |
+| lot_number            | Lot number of the beans tested                                     | character |
+| mill                  | Mill where the beans were processed                                | character |
+| ico_number            | International Coffee Organization number                           | character |
+| company               | Company name                                                       | character |
+| altitude              | Altitude - this is a messy column - I've left it for some cleaning | character |
+| region                | Region where bean came from                                        | character |
+| producer              | Producer of the roasted bean                                       | character |
+| number_of_bags        | Number of bags tested                                              | double    |
+| bag_weight            | Bag weight tested                                                  | character |
+| in_country_partner    | Partner for the country                                            | character |
+| harvest_year          | When the beans were harvested (year)                               | character |
+| grading_date          | When the beans were graded                                         | character |
+| owner_1               | Who owns the beans                                                 | character |
+| variety               | Variety of the beans                                               | character |
+| processing_method     | Method for processing                                              | character |
+| aroma                 | Aroma grade                                                        | double    |
+| flavor                | Flavor grade                                                       | double    |
+| aftertaste            | Aftertaste grade                                                   | double    |
+| acidity               | Acidity grade                                                      | double    |
+| body                  | Body grade                                                         | double    |
+| balance               | Balance grade                                                      | double    |
+| uniformity            | Uniformity grade                                                   | double    |
+| clean_cup             | Clean cup grade                                                    | double    |
+| sweetness             | Sweetness grade                                                    | double    |
+| cupper_points         | Cupper Points                                                      | double    |
+| moisture              | Moisture Grade                                                     | double    |
+| category_one_defects  | Category one defects (count)                                       | double    |
+| quakers               | quakers                                                            | double    |
+| color                 | Color of bean                                                      | character |
+| category_two_defects  | Category two defects (count)                                       | double    |
+| expiration            | Expiration date of the beans                                       | character |
+| certification_body    | Who certified it                                                   | character |
+| certification_address | Certification body address                                         | character |
+| certification_contact | Certification contact                                              | character |
+| unit_of_measurement   | Unit of measurement                                                | character |
+| altitude_low_meters   | Altitude low meters                                                | double    |
+| altitude_high_meters  | Altitude high meters                                               | double    |
+| altitude_mean_meters  | Altitude mean meters                                               | double    |
+
+
+```{r Read the data set ,message=FALSE, warning=FALSE, echo=FALSE}
+
+drop <- c("owner","farm_name", "mill", "lot_number", "region", "producer", "ico_number", "company", "number_of_bags", "in_country_partner", "owner_1", "variety", "certification_body", "certification_address", "certification_contact", "altitude","altitude_low_meters","altitude_high_meters","unit_of_measurement","category_one_defects","category_two_defects","bag_weight", "harvest_year") 
+
+df = coffee_ratings[,!(names(coffee_ratings) %in% drop)]
+
+coffee_ratings <- df
+
+```
+
+## Tyding the data set 
+
+As part of the data tiding phase, we have chosen to adjust the variables so that they are suitable to work with them properly.
+During the study, we decided which data is relevant in the file and which is not. Therefore, We presented only the data that support the research question and goals.
+To make the data tell the story, we had to focus on the variables that tell it the best. From a large amount of more than 40 variables, we focused on less than 20 in this project.
+
+Interesting to know, while tidying the data and by aiming our goals, we found out that all the grading dates occurred exactly one year before the expiration date (that made us suspect the credibility of the reports). Therefore, we changed a little our plan and ignored that. 
+
+```{r Tyding the data set, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+
+ 
+new_column_name <- coffee_ratings%>%
+  rename(total_rating = total_cup_points)
+coffee_ratings <- new_column_name
+
+after_remove_1 <- str_remove_all(coffee_ratings$country_of_origin,"\\(Hawaii\\)")
+after_remove_2 <- str_remove_all(after_remove_1,"\\, United Republic Of")
+after_remove_3 <-str_remove_all(after_remove_2,"\\(Puerto Rico\\)")
+coffee_ratings$country_of_origin <- after_remove_3
+
+grading_dates <- coffee_ratings$grading_date
+grading_dates<- mdy(grading_dates)
+coffee_ratings <- coffee_ratings%>%
+  mutate(grading_date_YMD = grading_dates)
+
+expiration_dates <- coffee_ratings$expiration
+expiration_dates <- mdy(expiration_dates)
+coffee_ratings <- coffee_ratings%>%
+  mutate(expiration_date_YMD = expiration_dates)
+
+coffee_ratings <- coffee_ratings%>%
+  mutate(diff_dates = (expiration_dates-grading_dates)/ ddays())
+
+drop1 <- c("grading_date","expiration") 
+df1 = coffee_ratings[,!(names(coffee_ratings) %in% drop1)]
+coffee_ratings <- df1
+coffee_ratings<- coffee_ratings%>%
+  na.omit(continent)
+```
+    
+## **Understanding the data**
+
+### Transforming variables
+
+As part of this phase, we added a continents column which was built based on an existing countries column.
+
+```{r Transforming variables,message=FALSE, warning=FALSE, note= FALSE, class.source="background_cool_color"}
+
+country_vector <- c(coffee_ratings$country_of_origin)
+continent <- countrycode(sourcevar = country_vector, origin = "country.name",destination = "region")
+coffee_ratings <-coffee_ratings%>%
+  mutate(continent)
+
+
+coffee_ratings <- coffee_ratings %>% 
+  relocate(continent, .before = processing_method)
+
+```
+  
+### Visualization
+##### **Rating per continent**
+```{r Visualization1 ,message=FALSE, warning=FALSE, class.source="background_cool_color"}
+coffee_ratings<-coffee_ratings[which(coffee_ratings$total_rating>70),]
+  coffee_ratings %>%
+  ggplot(aes(total_rating, continent)) +
+  geom_boxplot(fill= "chocolate3")+
+  theme(axis.text.x = element_text(angle = -20, vjust = 0.5, hjust=0.2)) +
+  theme(legend.position = "none")+
+  labs(title = "Rating per continent")+
+  coord_flip()
+  
+```
+
+From the farmer's point of view, we recommend growing beans on a continent with the highest rating values (not extreme values), and low variability.
+
+As we see, the sub-Saharan African continent has high- value ratings, with relatively low- variance value, and for a farmer interested in opening a coffee farm we would recommend setting up his own farm there.
+
+The second priority will be the Asian continent where although the values are relatively similar to the Latin American continent but without low extreme values as they appear in it.
+
+
+##### **Rating per processing method**
+```{r Visualization3 ,message=FALSE, warning=FALSE, class.source="background_cool_color"}
+coffee_ratings %>%
+  ggplot(aes(total_rating, processing_method)) +
+  geom_boxplot(fill= "coral4") +
+  theme(axis.text.x = element_text(angle = -20, vjust = 0.5, hjust=0.2)) +
+  theme(legend.position = "none")+
+  labs(title = "Rating per processing method")+
+  coord_flip() 
+    
+```
+
+
+On this graph, we wanted to examine the influence of the processing method on rating. As we can see, the 'Natural / Dry' method has the highest rating and highest median.
+
+It is interesting to know, that the natural process is common in regions where there is no access to water such as Ethiopia and some regions in Brazil. The process is commonly traditional in the regions where it is used and no big development is seen in the natural processing during past years. Natural processed coffees definitely divide baristas' opinions in terms of flavor; some love them, others hate them. 
+The natural process definitely adds flavors to the coffee such as fruitiness and sweetness regardless of variety and region.
+
+For more information, enter [**PAULIG BARISTA INSTITUTE**](https://www.baristainstitute.com/blog/jori-korhonen/january-2020/coffee-processing-methods-drying-washing-or-honey)
+
+
+##### **Rating distribution**
+```{r Visualization4 ,message=FALSE, warning=FALSE, class.source="background_cool_color"}  
+coffee_ratings %>%
+  ggplot(aes(coffee_ratings$total_rating)) +
+  geom_density(kernel= "gaussian") +
+  labs(title = "Rating distribution")+
+  scale_x_continuous(name ="rating (0-100)", limits = c(60,100),breaks = seq(60, 100, by = 5))
+
+
+
+```
+
+Here we can see that the distribution of ratings is high between 75 to 88, which gives us a broad understanding of the ratings, what is considered an excellent rating, and what is not.
+
+It is worth noting that the vast majority of the observations (99%) were of coffee made from 'Arabica' beans. Consequently, when working with these data, we will have to be aware of the low amount of observations of this strain, which can affect other indices.
+
+### Modelling
+##### Examine the relationship between rating and altitude of growth
+```{r Modelling- simple regression- telationship between rating and altitude of growth  ,message=FALSE, warning=FALSE, class.source="background_cool_color"}
+coffee_ratings %>%
+  ggplot(aes(x = altitude_mean_meters, y = total_rating))+
+  geom_point(size=1)+
+  stat_smooth(method = "lm")+
+  scale_x_continuous(name ="Height (meters)", limits = c(0,4000),breaks = seq(0, 4000, by = 500))+
+  scale_y_continuous(name = "Rating (0-100)",limits = c(70,100),breaks = seq(70, 100, by = 5))+
+  scale_color_brewer(palette = "Set1")+
+  labs(title = "Relationship between rating and altitude of growth")
+
+```
+
+##### Lets zoom in a little..
+```{r Modelling- simple regression- zoom in- telationship between rating and altitude of growth  ,message = FALSE, warning = FALSE, echo = FALSE, class.source="background_cool_color"}
+coffee_ratings %>%
+  ggplot(aes(x = altitude_mean_meters, y = total_rating)) +
+  geom_point(size=1) +
+  stat_smooth(method = "lm") +
+  scale_x_continuous(name ="Height (meters)", limits = c(450,2000),breaks = seq(450, 2000, by = 150)) +
+  scale_y_continuous(name = "Rating (0-100)",limits = c(70,100),breaks = seq(70, 100, by = 5)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Examine the relationship between rating and altitude of growth- zoom in")
+
+simple_reg_coffee<-lm(formula = total_rating~altitude_mean_meters, data= coffee_ratings)
+summary(simple_reg_coffee)
+
+
+``` 
+
+
+According to the linear module, we can see a small positive slope representing the relationship between rating and growth height.
+Furthermore, by examining the linear regression output, we can see that the interception is very close to zero. In addition, we can not ignore the multiple R squared given, which is the coefficient of determination, measures the magnitude of the effect of the regression, which is very low, corresponding to the very wire ratio. Along with, a high p-value also indicates that there is no linear relationship between the variables.
+
+Therefore, we have seen that these conclusions can only be drawn regarding the altitude range between 500 and 2000 meters. According to the results from the graph, we do not recommend growing coffee above 2000 meters, but in truth, we do not have enough data to provide an unequivocal recommendation on the subject.
+
+Now that we found the relationship- $$y = \hat\beta_0\ + \hat\beta_1X + \epsilon $$ We want to figure out whether this relationship is "real". 
+
+To develop the statistical test for the coefficients we will need the following assumptions:
+
+1. The errors are normally distributed.
+$$
+\epsilon \sim N(0,\sigma^2)
+$$
+2. The errors are homoscedastic.
+
+As a result of the analysis of the output from the simple regression, it appears that there is no linear relationship between the variables, resulting in us deciding not to continue and check the two sections we mentioned.
+
+
+##### **Multiple regression**
+```{r Modelling- multiple regression, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+mult_reg_coffee<-lm(formula = total_rating~aroma + aftertaste + balance + flavor + acidity + body + moisture + balance + uniformity +sweetness,data= coffee_ratings)
+summary(mult_reg_coffee)
+```
+In this model, we performed a multiple linear regression, with the goal of testing which of the variables has the strongest relationship to the final ranking.
+We have seen before our eyes the importance of providing quality data to the farmer, and below are the findings.
+On a broad look, it can be seen that there is a regression that explains the variables well. This is based on a value of high R squared.
+Beyond that, the most significant variable that affects the final ranking, is the flavor of the coffee. Therefore, we recommend that the farmer emphasize this in all aspects that affect it.
+
+
+
+##### Now that we found a linear relationship, we have the chance to check the following assumptions:
+1. The errors are homoscedastic. 
+2. The errors are normally distributed.
+$$
+\epsilon \sim N(0,\sigma^2)
+$$
+
+
+```{r Modelling- Residual Plot, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+mult_resid_plot<- mult_reg_coffee %>%
+  ggplot(aes(x=.fitted,y=.resid)) +
+  geom_point(alpha=0.1) + geom_hline(yintercept=0) +
+  scale_x_continuous(name ="Rating (0-100)") +
+  scale_y_continuous(name = "Residuals",limits = c(-2.5, 2.5),breaks = seq(-2.5, 2.5, by = 0.5))+
+  labs(title = "Residual Plot")
+mult_resid_plot
+```
+
+As shown, the residuals are not homoscedastic - as the rating increases, it does appear to be a parallel change in the residuals.
+
+
+```{r Modelling- Normal Q-Q Plot, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+mult_resid_qq<- mult_reg_coffee %>%
+  ggplot(aes(sample=.resid)) +
+  geom_qq(alpha=0.2) + geom_qq_line(col="red") +
+  scale_y_continuous(limits = c(-5, 2.5),breaks = seq(-5, 2.5, by = 1))+
+  labs(title = "Normal Q-Q Plot")
+mult_resid_qq
+
+```
+
+By looking at the qqplot, which can give us a good graphical assessment of "goodness of fit", rather than reducing to a numerical summary, we can see that the errors is not normally distributed. The empirical distribution is smeared more than we would expect, therefore, the working assumption does not hold.
+
+
+##### Correlation between variables 
+Handling multicolinearity- check for correlation between the explanatory variables
+
+```{r Modelling- Handling multicolinearity, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+coffee_cor <- coffee_ratings %>%
+  filter(species == "Arabica") %>%
+  select_if(is.numeric) %>%
+  select(-altitude_mean_meters, -cupper_points, -clean_cup, -quakers) %>%
+  cor(use = "pairwise.complete.obs") 
+
+ggcorrplot::ggcorrplot(coffee_cor, lab = T, type = "upper", colors = c("blue","white", "Gold"))+
+  labs(title = "Handling multicolinearity")
+
+
+```
+
+We want to test whether the correlations are high so that we reach a situation of multicolinearity.
+One of the methods to check if this situation exists, is through the above graph. Through it, it is possible to make a decision whether we need to perform a certain transformation on the data in order to arrive at the best forecasting model.
+And in general, a friendly way to examine the relationship between each pair of variables.
+
+$$
+H_0: \mu_("Arabica" rating) = \mu_("Robusta" rating)
+$$
+$$
+H_1: \mu_("Arabica" rating) \ne \mu_("Robusta" rating)
+$$
+
+```{r Modelling- t.test, message=FALSE, warning=FALSE, class.source="background_cool_color"}
+
+t.test(formula= total_rating ~ species, data = coffee_ratings, alternative = "two.sided")
+
+
+```
+
+
+In conclusion, we will recommend the farmer to plant 'Arabica' seeds.
+
+
+# **Summary & Conclusions**
+
+In this work, we have set the goal of providing the farmer with the perfect infrastructure for growing coffee. That is, which variables may affect the quality of coffee, from a geographical location through the method of processing to the height of growth.
+
+The overarching main is to produce the best coffee in the world and to provide a farmer who wants to set up a coffee bean farm with the most information-based tools we can.
+In our study, we chose to focus on three research questions-
+
+1. Is there a difference between the crop height and the processing methods for the overall rating?
+We found that the best processing method (in the view of the overall score), is dry processing, and also, we found that there is no linear correlation between the height of the growth and its final rank.
+
+2. Does the geographical location of the beans have an effect on the overall score? 
+The continent we found to be the best for growing coffee beans is the Sub- Saharan African continent.
+
+3. What is the most significant component that effects the coffee rating?
+We found that the most component that affects the coffee rating is 'flavor', and the second is 'aftertaste'.
+
+To sum up, this project does not provide unequivocal data and conclusions of a high significance level, although it is possible to establish guidelines for the farmer who wishes to open a farm for growing coffee beans.
+
+**Good luck for the future farmers!**
